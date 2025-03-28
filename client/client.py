@@ -52,39 +52,8 @@ def main():
     receive_message_thread =  threading.Thread(target=receive_message, args=(sock, ), daemon=True)
     input_message_thread.start()
     receive_message_thread.start()
-
     input_message_thread.join()
     receive_message_thread.join()
-    # receive_thread = threading.Thread(target=)
-
-
-    # pid = os.fork()
-
-    # if pid > 0:
-    #     while True:
-    #         # message = "hogedesu"
-    #         message = input(f'{user_name} input: ')
-    #         print("\033[1A\033[2K", end="")
-    #         # print("soushinn")
-    #         print(f"{user_name} sended: {message}")
-
-    #         sock.send(protocol_header(len(user_name)) + (user_name + message).encode())
-            
-    #         socket.timeout(2)
-            
-    #         # response_data = sock.recv(4096)
-    #         # print_message(response_data)
-    # else:
-    #     while True:
-    #         response_data = sock.recv(4096)
-    #         print("\033[2K\r", end="")
-    #         # print(response_data)
-    #         print_message(response_data)
-    #         # print(f'{user_name} after response: ', end="")
-    #         # print("hoge", end="")
-    #         # print("hoge\033[10C")
-
-
 
 if __name__ == "__main__":
     main()

@@ -47,7 +47,7 @@ def udp_flow():
 
 def input_message(sock: socket):
     while True:
-        message = input(f'{user_name} : > ')
+        message = input(f'{user_name} > ')
         print("\033[1A\033[2K", end="")
         request_message = f"{user_name} : {message}"
         print(f"{user_name} : {message}")

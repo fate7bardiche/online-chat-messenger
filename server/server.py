@@ -4,12 +4,11 @@ import time
 import threading
 import uuid
 import time
-from parser import parse_protocol, parse_protocol_header, parse_protocol_body
+from tcp_parser import parse_tcp_protocol, parse_tcp_protocol_header, parse_tcp_protocol_body
+from udp_parser import parse_udp_protocol, parse_udp_protocol_header, parse_udp_protocol_body
 
 chat_room_list = {}
 client_list = []
-
-hoge = ["sdf", "sdf"]
 
 # 各クライアントの最後のメッセージ送信時刻を追跡し、条件を満たせば削除する
 def remove_client(client_list):
@@ -32,44 +31,61 @@ def remove_client(client_list):
         monitor_wait_second = 5
         time.sleep(monitor_wait_second)
 
-def main_udp(client_list: list):
+
+
+# UDP関係
+def udp_main():
     sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
     server_address = '0.0.0.0'
     server_port = 9002
 
     sock.bind((server_address, server_port))
 
-    thread = threading.Thread(target=remove_client, args=(client_list, ), daemon=True)
-    thread.start()
+    # todo: client_listから、chat_room_listに対応させる
+    # thread = threading.Thread(target=remove_client, args=(client_list, ), daemon=True)
+    # thread.start()
 
     while True:
         data, address = sock.recvfrom(4096)
 
-        # 受信したデータのaddressを持つaddressを持つclientがリレーシステムに存在するか確認
-        # 存在するなら、最後のメッセージ送信時刻を更新する
-        # 存在しないなら、リレーシステムにclientとして追加する
-        result = next(((i, c) for i, c in enumerate(client_list) if c["address"] == address), None)
-        if result == None:
-            client_list.append({"address": address, "last_sent_at": datetime.now()})
-        else:
-            index, c = result
-            client_list[index]["last_sent_at"] = datetime.now()
+        header, body = parse_udp_protocol(data)
+        chat_room_name_length, token_length = parse_udp_protocol_header(header)
+        response_chat_room_name, response_token, response_message = parse_udp_protocol_body(body, chat_room_name_length, token_length)
 
-        user_name_len = int.from_bytes(data[:1], "big")
-        user_name = data[:user_name_len + 1].decode()
+        chat_room: dict = chat_room_list[response_chat_room_name]
+
+        print(chat_room)
+        
+        
+        # todo: chat_roomがundefineの場合は、該当する名前のチャットルームがないことを表す。
+        # チャットルームが存在しません系のメッセージをsendしておく。
+        if chat_room == None:
+            print("chat_room is undefined")
+            continue
+       
+        chat_room_users = chat_room["users"]
+        user: dict = chat_room_users[response_token]
+        if user == None:
+            print("user is undefined")
+            continue
+
+        user["last_accessed_at"] = datetime.now()
+        if(user["udp_ip_address"] == None):
+            user["udp_ip_address"] = address
+        
+        user_name = user["user_name"]
         print("ユーザーネーム: ", user_name)
-        print("メッセージ", data[user_name_len + 1:].decode())
+        print("メッセージ", response_message)
 
-        for client in client_list:
-            client_addr = client["address"]
-            if  client_addr[0] == address[0] and client_addr[1] == address[1]: continue
-            print("send to", client_addr[1])
-            sock.sendto(data, client_addr)
-
-
-
-
-
+        users_tokens = chat_room_users.keys()
+        print(chat_room_users)
+        for user_token in users_tokens:
+            destination_user = chat_room_users[user_token]
+            destination_addr = destination_user["udp_ip_address"]
+            # 今回メッセージを送ったuser以外にメッセージを送信する
+            if  destination_addr[0] == address[0] and destination_addr[1] == address[1]: continue
+            print("send to", destination_user)
+            sock.sendto(response_message.encode(), destination_addr)
 
 
 # TCP関係
@@ -83,10 +99,10 @@ def tcp_flow(connection: socket.socket, address: tuple[str, int]):
             print(err)
             break
 
-        header, body = parse_protocol(data)
-        room_name_length, operation, state, payload_length = parse_protocol_header(header)
+        header, body = parse_tcp_protocol(data)
+        room_name_length, operation, state, payload_length = parse_tcp_protocol_header(header)
         room_name_bits = body[:room_name_length]
-        room_name, payload = parse_protocol_body(body, room_name_length, payload_length)
+        room_name, payload = parse_tcp_protocol_body(body, room_name_length)
 
         print(room_name_length)
         print(operation)
@@ -145,15 +161,14 @@ def tcp_flow(connection: socket.socket, address: tuple[str, int]):
         else:
             print("operationが不正です。")
 
-        # break
-    
-    # connection.close()
+        break
 
 def create_user(user_name: str, address: tuple[str, int], user_token: str):
     user = {
             "token": user_token,
             "user_name": user_name,
-            "ip_address": address,
+            "tcp_ip_address": address,
+            "udp_ip_address": None,
             "last_accessed_at": datetime.now()
         }
     return user
@@ -183,17 +198,15 @@ def tcp_main():
     
         print("after acept")
         print(client_address)
-        # tcp_flow(tcp_sock, connection)
 
         tcp_thread = threading.Thread(target=tcp_flow, args=(connection, client_address), daemon=True)
         tcp_thread.start()
-        # tcp_thread.join()
         
 
 
 
 
-        
+
 
 if __name__ == "__main__":
     
@@ -203,6 +216,6 @@ if __name__ == "__main__":
     # thread_remove_user.start()
     # thread_tcp_flow.start()
     # tcp_flow()
-    print("tcp finish")
-    # main(client_list)
+    thread_udp_flow = threading.Thread(target=udp_main, args=(), daemon=True)
+    thread_udp_flow.start()
     tcp_main()

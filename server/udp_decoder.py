@@ -1,9 +1,9 @@
-def parse_udp_protocol(data: bytes):
+def decode_udp_protocol(data: bytes):
     header = data[:2]
     body = data[2:]
     return header, body
 
-def parse_udp_protocol_header(header: bytes):
+def decode_udp_protocol_header(header: bytes):
     chat_room_name_length = int.from_bytes(header[:1], "big")
     print("chat_room_name_length is ", chat_room_name_length)
     token_length = int.from_bytes(header[1:2], "big")
@@ -11,10 +11,10 @@ def parse_udp_protocol_header(header: bytes):
     return chat_room_name_length, token_length
 
 
-# トークンのparseうまくいっていない。
+# トークンのdecodeうまくいっていない。
 # 一部メッセージの方にも漏れてしまっている。
 
-def parse_udp_protocol_body(body: bytes, chat_room_name_length: int, token_length: int):
+def decode_udp_protocol_body(body: bytes, chat_room_name_length: int, token_length: int):
     response_chat_room_name = body[:chat_room_name_length].decode()
     print(response_chat_room_name)
     message_head_index = chat_room_name_length + token_length

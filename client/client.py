@@ -66,8 +66,8 @@ def receive_message(sock: socket.socket):
 
         response_message = response_data.decode()
 
-        # header, body = parse_udp_protocol(response_data)
-        # chat_room_name_length, token_length = parse_udp_protocol_header(header)
+        # header, body = decode_udp_protocol(response_data)
+        # chat_room_name_length, token_length = decode_udp_protocol_header(header)
 
         print("\033[2K\r", end="")
         print(response_message)
@@ -83,17 +83,17 @@ def create_udp_protocol(message: str):
 def create_udp_header(room_name_length: int, token_length: int):
     return room_name_length.to_bytes(1, "big") + token_length.to_bytes(1, "big")
 
-# def parse_udp_protocol(data: bytes):
+# def decode_udp_protocol(data: bytes):
 #     header = data[:2]
 #     body = data[2:]
 #     return header, body
 
-# def parse_udp_protocol_header(header: bytes):
+# def decode_udp_protocol_header(header: bytes):
 #     chat_room_name_length = int.from_bytes(header[:1], "big")
 #     token_length = int.from_bytes(header[1:], "big")
 #     return chat_room_name_length, token_length
 
-# def parse_udp_protocol_body(body: bytes, chat_room_name_length: int, token_length: int):
+# def decode_udp_protocol_body(body: bytes, chat_room_name_length: int, token_length: int):
 #     response_chat_room_name = body[:chat_room_name_length].decode()
 #     response_token = body[chat_room_name_length:token_length].decode()
 #     message = body[token_length:].decode()
@@ -134,9 +134,9 @@ def tcp_flow():
         global chat_room_name
         global user_name
 
-        res_header, res_body = parse_protocol(tcp_sock.recv(4096))
-        room_name_length, operation, state, payload_length = parse_protocol_header(res_header)
-        chat_room_name, payload = parse_protocol_body(res_body, room_name_length, payload_length)
+        res_header, res_body = decode_protocol(tcp_sock.recv(4096))
+        room_name_length, operation, state, payload_length = decode_protocol_header(res_header)
+        chat_room_name, payload = decode_protocol_body(res_body, room_name_length, payload_length)
 
         if state == 1:
             print(f"ステータスコードは{payload}です。")
@@ -162,19 +162,19 @@ def input_flow():
     body = room_name.encode() + user_name.encode()
     return header + body
 
-def parse_protocol(data: bytes):
+def decode_protocol(data: bytes):
     header = data[:32]
     body = data[32:]
     return header, body
 
-def parse_protocol_header(header: bytes):
+def decode_protocol_header(header: bytes):
     room_name_length = int.from_bytes(header[:1], "big")
     operation = int.from_bytes(header[1:2], "big")
     state = int.from_bytes(header[2:3], "big")
     payload_length = int.from_bytes(header[3:33], "big")
     return room_name_length, operation, state, payload_length
 
-def parse_protocol_body(body: bytes, room_name_length: int, payload_length: int):
+def decode_protocol_body(body: bytes, room_name_length: int, payload_length: int):
     room_name = body[:room_name_length].decode()
     print(room_name)
     print(payload_length)

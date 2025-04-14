@@ -4,8 +4,8 @@ import time
 import threading
 import uuid
 import time
-from tcp_parser import parse_tcp_protocol, parse_tcp_protocol_header, parse_tcp_protocol_body
-from udp_parser import parse_udp_protocol, parse_udp_protocol_header, parse_udp_protocol_body
+from tcp_decoder import decode_tcp_protocol, decode_tcp_protocol_header, decode_tcp_protocol_body
+from udp_decoder import decode_udp_protocol, decode_udp_protocol_header, decode_udp_protocol_body
 
 chat_room_list = {}
 client_list = []
@@ -48,9 +48,9 @@ def udp_main():
     while True:
         data, address = sock.recvfrom(4096)
 
-        header, body = parse_udp_protocol(data)
-        chat_room_name_length, token_length = parse_udp_protocol_header(header)
-        response_chat_room_name, response_token, response_message = parse_udp_protocol_body(body, chat_room_name_length, token_length)
+        header, body = decode_udp_protocol(data)
+        chat_room_name_length, token_length = decode_udp_protocol_header(header)
+        response_chat_room_name, response_token, response_message = decode_udp_protocol_body(body, chat_room_name_length, token_length)
 
         chat_room: dict = chat_room_list[response_chat_room_name]
 
@@ -99,10 +99,10 @@ def tcp_flow(connection: socket.socket, address: tuple[str, int]):
             print(err)
             break
 
-        header, body = parse_tcp_protocol(data)
-        room_name_length, operation, state, payload_length = parse_tcp_protocol_header(header)
+        header, body = decode_tcp_protocol(data)
+        room_name_length, operation, state, payload_length = decode_tcp_protocol_header(header)
         room_name_bits = body[:room_name_length]
-        room_name, payload = parse_tcp_protocol_body(body, room_name_length)
+        room_name, payload = decode_tcp_protocol_body(body, room_name_length)
 
         print(room_name_length)
         print(operation)

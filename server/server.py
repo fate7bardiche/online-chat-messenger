@@ -8,24 +8,34 @@ from tcp_decoder import decode_tcp_protocol, decode_tcp_protocol_header, decode_
 from udp_decoder import decode_udp_protocol, decode_udp_protocol_header, decode_udp_protocol_body
 
 chat_room_list = {}
-client_list = []
+# client_list = []
 
 # 各クライアントの最後のメッセージ送信時刻を追跡し、条件を満たせば削除する
-def remove_client(client_list):
+def remove_client(sock: socket.socket):
     while True:
-        print(f"現在リレーシステムに存在しているclientは{len(client_list)}人")
-        print(client_list)
-        print("===========")
+        # print(f"現在リレーシステムに存在しているclientは{len(client_list)}人")
+        # print(client_list)
+        print("======================")
         now = datetime.now()
-        for i in range(len(client_list) -1, -1, -1):
-            diff = abs(now - client_list[i]["last_sent_at"])
 
-            # 最後にメッセージを送ってから120秒以上経過しているクライアントをリレーシステムから削除
-            expired_second = 120
-            expired_at = timedelta(seconds=expired_second)
-            if diff > expired_at:
-                print("deleted client", client_list[i])
-                client_list.pop(i)
+        chat_room_name_list = chat_room_list.keys()
+        print(chat_room_list)
+        for chat_room_name in chat_room_name_list:
+            chat_room_users = chat_room_list[chat_room_name]["users"]
+            # user_token_list = 
+            for user_token in list(chat_room_users.keys()):
+                user = chat_room_users[user_token]
+                diff = abs(now - user["last_accessed_at"])
+
+                # 最後にメッセージを送ってから120秒以上経過しているクライアントをリレーシステムから削除
+                expired_second = 16
+                expired_at = timedelta(seconds=expired_second)
+                if diff > expired_at:
+                    
+                    print("--- deleted client: ", chat_room_name, user)
+                    chat_room_users.pop(user_token)
+                    delete_message = "exit: 最後に投稿してから一定時間が経過したので、チャットから自動的に退出しました。"
+                    sock.sendto(delete_message.encode(), user["udp_ip_address"])
  
         # リレーから削除するべきクライアントがいるかどうか、5秒ごとに確認する
         monitor_wait_second = 5
@@ -41,9 +51,8 @@ def udp_main():
 
     sock.bind((server_address, server_port))
 
-    # todo: client_listから、chat_room_listに対応させる
-    # thread = threading.Thread(target=remove_client, args=(client_list, ), daemon=True)
-    # thread.start()
+    thread = threading.Thread(target=remove_client, args=(sock, ), daemon=True)
+    thread.start()
 
     while True:
         data, address = sock.recvfrom(4096)
@@ -86,6 +95,9 @@ def udp_main():
             if  destination_addr[0] == address[0] and destination_addr[1] == address[1]: continue
             print("send to", destination_user)
             sock.sendto(response_message.encode(), destination_addr)
+
+
+
 
 
 # TCP関係

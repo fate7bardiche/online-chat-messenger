@@ -1,6 +1,8 @@
 import socket
 import sys
 import threading
+import os
+import signal
 
 token = ""
 user_name = ""
@@ -32,6 +34,8 @@ def udp_flow():
 
     # sock.send(protocol_header(len(user_name)) + (user_name).encode())
 
+    # stop_event = threading.Event()
+
     input_message_thread =  threading.Thread(target=input_message, args=(sock, ), daemon=True)
     receive_message_thread =  threading.Thread(target=receive_message, args=(sock, ), daemon=True)
     input_message_thread.start()
@@ -39,26 +43,45 @@ def udp_flow():
     input_message_thread.join()
     receive_message_thread.join()
 
+    # joinしないパターンを試してみる
+
 # def print_message(bytes_data: bytes):
 #     user_name_len = int.from_bytes(bytes_data[:1], "big")
 #     user_name = bytes_data[1:user_name_len + 1].decode()
 #     message = bytes_data[user_name_len + 1:].decode()
 #     print(f"{user_name}: {message}")
 
-def input_message(sock: socket):
+# def input_worker(result_queue: queue.Queue):
+#     global now_input_message
+#     print("in worker")
+#     message = input(f'{user_name} > ')
+#     print("before put")
+#     result_queue.put(message)
+#     print("after put")
+#     now_input_message = False
+#     return message
+
+def input_message(sock: socket.socket):
     while True:
         message = input(f'{user_name} > ')
+        print("after input thread start")
+    
+        # message = result_q.get()
         print("\033[1A\033[2K", end="")
         request_message = f"{user_name} : {message}"
-        print(f"{user_name} : {message}")
 
-        request_data = create_udp_protocol(f"{user_name} : {message}")
+        request_data = create_udp_protocol(request_message)
 
         sock.send(request_data)
         
         socket.timeout(2)
+        
+        # print("インプットのループ確認")
+        
 
 def receive_message(sock: socket.socket):
+    global flow_state
+    delete_flag_str = "exit: "
     while True:
         # クライアントが受信するデータにはヘッダーは存在しない。
         # 送信時のデータのヘッダーが2バイトで、その2を引いた4094をクライアントは受信する。
@@ -69,8 +92,19 @@ def receive_message(sock: socket.socket):
         # header, body = decode_udp_protocol(response_data)
         # chat_room_name_length, token_length = decode_udp_protocol_header(header)
 
-        print("\033[2K\r", end="")
-        print(response_message)
+        if(delete_flag_str in response_message):
+            exit_message = response_message.replace(delete_flag_str, "")
+            print("\033[2K\r", end="")
+            print(exit_message)
+
+            sock.close()
+            # 本当は入力受付と、受信受付それぞれのスレッドを終わらせて、TCPのフローに戻したい。
+            os.kill(os.getpid(), signal.SIGKILL)
+
+            break
+        else:
+            print("\033[2K\r", end="")
+            print(response_message)
         # print_message(response_message)
 
 def create_udp_protocol(message: str):
@@ -186,10 +220,7 @@ def create_tcp_header(room_name_length: int, opr: int, state_length: int, payloa
     return room_name_length.to_bytes(1, "big") + opr.to_bytes(1, "big") + state_length.to_bytes(1, "big") + payload_length.to_bytes(29, "big")
 
 if __name__ == "__main__":
-    # main()
     tcp_flow()
     udp_flow()
-    print("finish!!!!")
-
 
     # TCPかUDP、どちらのフローを表示するのかに、stateでSwitch的に切り替えるパターン

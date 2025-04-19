@@ -1,3 +1,6 @@
+import sys
+sys.path.append('..')
+
 import socket
 from datetime import datetime, timedelta
 import time
@@ -6,9 +9,31 @@ import uuid
 import time
 from tcp_decoder import decode_tcp_protocol, decode_tcp_protocol_header, decode_tcp_protocol_body
 from udp_decoder import decode_udp_protocol, decode_udp_protocol_header, decode_udp_protocol_body
+from packages.config import tcp_server_address, tcp_server_port, udp_server_address, udp_server_port
+
+
 
 chat_room_list = {}
 # client_list = []
+exit_chat_room_flag_str = "exit:"
+
+def filter_expired_users_token(chat_room_users, expired_second: int, now: datetime):
+    token_list = []
+    for user_token in list(chat_room_users.keys()):
+        user = chat_room_users[user_token]
+        diff = abs(now - user["last_accessed_at"])
+
+        expired_at = timedelta(seconds=expired_second)
+        if diff > expired_at:
+            token_list.append(user_token)
+    return token_list
+
+def delete_user(chat_room_users, user_token: str):
+    user = chat_room_users[user_token]
+    chat_room_users.pop(user_token)
+    return user
+# user削除して削除したuserのオブジェクトを返す
+# sendするのは、削除とは別作業なので、関数とは別に戻り値のユーザーを使って削除する
 
 # 各クライアントの最後のメッセージ送信時刻を追跡し、条件を満たせば削除する
 def remove_client(sock: socket.socket):
@@ -17,25 +42,20 @@ def remove_client(sock: socket.socket):
         # print(client_list)
         print("======================")
         now = datetime.now()
+        print(now)
 
         chat_room_name_list = chat_room_list.keys()
         print(chat_room_list)
         for chat_room_name in chat_room_name_list:
             chat_room_users = chat_room_list[chat_room_name]["users"]
-            # user_token_list = 
-            for user_token in list(chat_room_users.keys()):
-                user = chat_room_users[user_token]
-                diff = abs(now - user["last_accessed_at"])
 
-                # 最後にメッセージを送ってから120秒以上経過しているクライアントをリレーシステムから削除
-                expired_second = 16
-                expired_at = timedelta(seconds=expired_second)
-                if diff > expired_at:
-                    
-                    print("--- deleted client: ", chat_room_name, user)
-                    chat_room_users.pop(user_token)
-                    delete_message = "exit: 最後に投稿してから一定時間が経過したので、チャットから自動的に退出しました。"
-                    sock.sendto(delete_message.encode(), user["udp_ip_address"])
+            # 最後にメッセージを送ってから120秒以上経過しているクライアントのトークンを抽出
+            target_user_token_list = filter_expired_users_token(chat_room_users, 16, now)
+            for user_token in target_user_token_list:
+                deleted_user = delete_user(chat_room_users, user_token)
+                print("--- deleted client: ", chat_room_name, deleted_user)
+                delete_message = "exit: 最後に投稿してから一定時間が経過したので、チャットから自動的に退出しました。"
+                sock.sendto(delete_message.encode(), deleted_user["udp_ip_address"])
  
         # リレーから削除するべきクライアントがいるかどうか、5秒ごとに確認する
         monitor_wait_second = 5
@@ -46,10 +66,8 @@ def remove_client(sock: socket.socket):
 # UDP関係
 def udp_main():
     sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
-    server_address = '0.0.0.0'
-    server_port = 9002
 
-    sock.bind((server_address, server_port))
+    sock.bind((udp_server_address, udp_server_port))
 
     thread = threading.Thread(target=remove_client, args=(sock, ), daemon=True)
     thread.start()
@@ -60,6 +78,8 @@ def udp_main():
         header, body = decode_udp_protocol(data)
         chat_room_name_length, token_length = decode_udp_protocol_header(header)
         response_chat_room_name, response_token, response_message = decode_udp_protocol_body(body, chat_room_name_length, token_length)
+
+        
 
         chat_room: dict = chat_room_list[response_chat_room_name]
 
@@ -87,7 +107,26 @@ def udp_main():
         print("メッセージ", response_message)
 
         users_tokens = chat_room_users.keys()
-        print(chat_room_users)
+
+        # クライアントから退出フラグを受け取った場合、チャットリレーから削除する
+        if exit_chat_room_flag_str in response_message:
+            delete_user(chat_room_users, response_token)
+            response_message = f"{user_name}: {user_name}がチャットから退出しました。"
+            print(response_message)
+
+            # そのユーザーがチャットのホストだった場合、チャットごと削除する。
+            # その場合は全ユーザーの退出処理と退出メッセージを送信する。
+            if chat_room.get("host_token", "") == response_token:
+                for user_token in list(users_tokens):
+                    deleted_user = delete_user(chat_room_users, user_token)
+                    delete_notice_message = f"{exit_chat_room_flag_str}ホストが退出したため、チャットルームが解散されました。"
+                    sock.sendto(delete_notice_message.encode(), deleted_user["udp_ip_address"])
+                deleted_chat_room = chat_room_list.pop(response_chat_room_name)
+                deleted_chat_room_name = deleted_chat_room.get("name")
+                print(f"{deleted_chat_room_name}チャットルームが削除されました")
+                continue
+        
+        print(users_tokens)
         for user_token in users_tokens:
             destination_user = chat_room_users[user_token]
             destination_addr = destination_user["udp_ip_address"]
@@ -194,9 +233,7 @@ def tcp_main():
 
     tcp_sock.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
 
-    server_address = '0.0.0.0'
-    server_port = 9001
-    tcp_sock.bind((server_address, server_port))
+    tcp_sock.bind((tcp_server_address, tcp_server_port))
     tcp_sock.listen(5)
 
     while True:

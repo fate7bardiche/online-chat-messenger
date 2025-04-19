@@ -1,26 +1,31 @@
-import socket
 import sys
+sys.path.append('..')
+
+import socket
 import threading
 import os
 import signal
+from packages.config import tcp_server_address, tcp_server_port, udp_server_address, udp_server_port
 
 token = ""
 user_name = ""
 chat_room_name = ""
 
-# UDP
-def udp_flow():
-    sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
+exit_chat_room_flag_str = "exit:"
 
-    server_address  = "0.0.0.0"
-    server_port = 9002
+def udp_setup():
+    sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
+    return sock
+
+# UDP
+def udp_flow(sock: socket.socket):
 
     print("token is ", token)
     print("user_name is ", user_name)
     print("chat_room_name is ", chat_room_name)
 
     try:
-        sock.connect((server_address, server_port))
+        sock.connect((udp_server_address, udp_server_port))
     except socket.error as err:
         print(err)
         sys.exit(1)
@@ -81,7 +86,7 @@ def input_message(sock: socket.socket):
 
 def receive_message(sock: socket.socket):
     global flow_state
-    delete_flag_str = "exit: "
+    
     while True:
         # クライアントが受信するデータにはヘッダーは存在しない。
         # 送信時のデータのヘッダーが2バイトで、その2を引いた4094をクライアントは受信する。
@@ -92,8 +97,8 @@ def receive_message(sock: socket.socket):
         # header, body = decode_udp_protocol(response_data)
         # chat_room_name_length, token_length = decode_udp_protocol_header(header)
 
-        if(delete_flag_str in response_message):
-            exit_message = response_message.replace(delete_flag_str, "")
+        if(exit_chat_room_flag_str in response_message):
+            exit_message = response_message.replace(exit_chat_room_flag_str, "")
             print("\033[2K\r", end="")
             print(exit_message)
 
@@ -147,12 +152,9 @@ def create_udp_header(room_name_length: int, token_length: int):
 def tcp_flow():
     tcp_sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
 
-    server_address  = "0.0.0.0"
-    server_port = 9001
-
     # サーバー側に揃える
     try:
-        tcp_sock.connect((server_address, server_port))
+        tcp_sock.connect((tcp_server_address, tcp_server_port))
     except socket.error as err:
         print(err)
         sys.exit(1)
@@ -187,13 +189,20 @@ def tcp_flow():
 def input_flow():
     global user_name
 
-    room_name = input("チャットルーム名を入力してください > ")
-    user_name = input("ユーザー名を入力してください > ")
-    operation = input("オペレーションの数字を入力してください。 作成: 1, 参加: 2  >")
+    while True:
 
-    state = 0
-    header = create_tcp_header(len(room_name.encode()), int(operation), state, len(user_name.encode()))
-    body = room_name.encode() + user_name.encode()
+        room_name = input("チャットルーム名を入力してください > ")
+        user_name = input("ユーザー名を入力してください > ")
+        operation = input("オペレーションの数字を入力してください。 作成: 1, 参加: 2  > ")
+        if not operation in ["1", "2"]:
+            print("オペレーションは選択肢の中から選んでください。")
+            continue
+
+        state = 0
+        header = create_tcp_header(len(room_name.encode()), int(operation), state, len(user_name.encode()))
+        body = room_name.encode() + user_name.encode()
+
+        break
     return header + body
 
 def decode_protocol(data: bytes):
@@ -219,8 +228,27 @@ def decode_protocol_body(body: bytes, room_name_length: int, payload_length: int
 def create_tcp_header(room_name_length: int, opr: int, state_length: int, payload_length: int):
     return room_name_length.to_bytes(1, "big") + opr.to_bytes(1, "big") + state_length.to_bytes(1, "big") + payload_length.to_bytes(29, "big")
 
-if __name__ == "__main__":
+def on_finish(sock: socket.socket):
+    request = create_udp_protocol(exit_chat_room_flag_str)
+    sock.send(request)
+    print("チャットルームから退出しました")
+
+
+def finish_handler(udp_sock: socket.socket):
+    on_finish(udp_sock)
+    sys.exit()
+
+def main():
     tcp_flow()
-    udp_flow()
+
+    udp_sock = udp_setup()
+    signal.signal(signal.SIGTERM, lambda a, b: finish_handler(udp_sock))
+    signal.signal(signal.SIGINT, lambda a, b: finish_handler(udp_sock))
+    udp_flow(udp_sock)
+
+
+    
+if __name__ == "__main__":
+    main()
 
     # TCPかUDP、どちらのフローを表示するのかに、stateでSwitch的に切り替えるパターン

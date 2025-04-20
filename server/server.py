@@ -203,6 +203,15 @@ def tcp_flow(connection: socket.socket, address: tuple[str, int]):
         elif operation == 2:
             state += 1
 
+            if chat_room_list.get(room_name) == None:
+                exsists_chat_room_error = f"{config.error_flag_str}{room_name}チャットルームはまだ存在しません。"
+                print(exsists_chat_room_error)
+                exsists_chat_room_error_bits = exsists_chat_room_error.encode()
+                error_header = create_tcp_header(room_name_length, operation, state, len(exsists_chat_room_error_bits))
+                error_response = error_header + room_name_bits + exsists_chat_room_error_bits
+                connection.send(error_response)
+                continue
+
             user_token_uuid = uuid.uuid4()
             user_token = str(user_token_uuid)
             user =  host_user = create_user(payload, address, user_token)

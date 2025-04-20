@@ -183,7 +183,8 @@ def tcp_flow():
         chat_room_name, payload = decode_protocol_body(res_body, room_name_length, payload_length)
 
         if config.error_flag_str in payload:
-            print(payload.replace(config.error_flag_str, ""))
+            error_message = payload.replace(config.error_flag_str, "")
+            print(error_message)
             continue
 
         print(f"{payload} トークンを受け取りました。")

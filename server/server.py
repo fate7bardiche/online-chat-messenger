@@ -47,7 +47,7 @@ def remove_client(sock: socket.socket):
             for user_token in target_user_token_list:
                 deleted_user = delete_user(chat_room_users, user_token)
                 print("--- deleted client: ", chat_room_name, deleted_user)
-                delete_message = "exit: 最後に投稿してから一定時間が経過したので、チャットから自動的に退出しました。"
+                delete_message = f"{config.error_flag_str}最後に投稿してから一定時間が経過したので、チャットから自動的に退出しました。"
                 sock.sendto(delete_message.encode(), deleted_user["udp_ip_address"])
  
         # リレーから削除するべきクライアントがいるかどうか、5秒ごとに確認する

@@ -9,13 +9,13 @@ import uuid
 import time
 from tcp_decoder import decode_tcp_protocol, decode_tcp_protocol_header, decode_tcp_protocol_body
 from udp_decoder import decode_udp_protocol, decode_udp_protocol_header, decode_udp_protocol_body
-from packages.config import tcp_server_address, tcp_server_port, udp_server_address, udp_server_port
+from packages import config
 
 
 
 chat_room_list = {}
 # client_list = []
-exit_chat_room_flag_str = "exit:"
+
 
 def filter_expired_users_token(chat_room_users, expired_second: int, now: datetime):
     token_list = []
@@ -67,7 +67,7 @@ def remove_client(sock: socket.socket):
 def udp_main():
     sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
 
-    sock.bind((udp_server_address, udp_server_port))
+    sock.bind((config.udp_server_address, config.udp_server_port))
 
     thread = threading.Thread(target=remove_client, args=(sock, ), daemon=True)
     thread.start()
@@ -79,12 +79,9 @@ def udp_main():
         chat_room_name_length, token_length = decode_udp_protocol_header(header)
         response_chat_room_name, response_token, response_message = decode_udp_protocol_body(body, chat_room_name_length, token_length)
 
-        
-
         chat_room: dict = chat_room_list[response_chat_room_name]
 
         print(chat_room)
-        
         
         # todo: chat_roomがundefineの場合は、該当する名前のチャットルームがないことを表す。
         # チャットルームが存在しません系のメッセージをsendしておく。
@@ -109,7 +106,7 @@ def udp_main():
         users_tokens = chat_room_users.keys()
 
         # クライアントから退出フラグを受け取った場合、チャットリレーから削除する
-        if exit_chat_room_flag_str in response_message:
+        if config.exit_chat_room_flag_str in response_message:
             delete_user(chat_room_users, response_token)
             response_message = f"{user_name}: {user_name}がチャットから退出しました。"
             print(response_message)
@@ -119,7 +116,7 @@ def udp_main():
             if chat_room.get("host_token", "") == response_token:
                 for user_token in list(users_tokens):
                     deleted_user = delete_user(chat_room_users, user_token)
-                    delete_notice_message = f"{exit_chat_room_flag_str}ホストが退出したため、チャットルームが解散されました。"
+                    delete_notice_message = f"{config.exit_chat_room_flag_str}ホストが退出したため、チャットルームが解散されました。"
                     sock.sendto(delete_notice_message.encode(), deleted_user["udp_ip_address"])
                 deleted_chat_room = chat_room_list.pop(response_chat_room_name)
                 deleted_chat_room_name = deleted_chat_room.get("name")
@@ -174,6 +171,16 @@ def tcp_flow(connection: socket.socket, address: tuple[str, int]):
         # ChatRoomの作成
         if operation == 1:
             state += 1
+
+            if not chat_room_list.get(room_name) == None:
+                exsists_chat_room_error = f"{config.error_flag_str}{room_name}チャットルームはすでに存在しています。"
+                print(exsists_chat_room_error)
+                exsists_chat_room_error_bits = exsists_chat_room_error.encode()
+                error_header = create_tcp_header(room_name_length, operation, state, len(exsists_chat_room_error_bits))
+                error_response = error_header + room_name_bits + exsists_chat_room_error_bits
+                connection.send(error_response)
+                continue
+            
             host_user_token_uuid = uuid.uuid4()
             host_user_token = str(host_user_token_uuid)
 
@@ -233,7 +240,7 @@ def tcp_main():
 
     tcp_sock.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
 
-    tcp_sock.bind((tcp_server_address, tcp_server_port))
+    tcp_sock.bind((config.tcp_server_address, config.tcp_server_port))
     tcp_sock.listen(5)
 
     while True:

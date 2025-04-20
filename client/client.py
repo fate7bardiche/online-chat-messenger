@@ -5,13 +5,12 @@ import socket
 import threading
 import os
 import signal
-from packages.config import tcp_server_address, tcp_server_port, udp_server_address, udp_server_port
-
+from packages import config
 token = ""
 user_name = ""
 chat_room_name = ""
 
-exit_chat_room_flag_str = "exit:"
+
 
 def udp_setup():
     sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
@@ -25,7 +24,7 @@ def udp_flow(sock: socket.socket):
     print("chat_room_name is ", chat_room_name)
 
     try:
-        sock.connect((udp_server_address, udp_server_port))
+        sock.connect((config.udp_server_address, config.udp_server_port))
     except socket.error as err:
         print(err)
         sys.exit(1)
@@ -97,8 +96,8 @@ def receive_message(sock: socket.socket):
         # header, body = decode_udp_protocol(response_data)
         # chat_room_name_length, token_length = decode_udp_protocol_header(header)
 
-        if(exit_chat_room_flag_str in response_message):
-            exit_message = response_message.replace(exit_chat_room_flag_str, "")
+        if(config.exit_chat_room_flag_str in response_message):
+            exit_message = response_message.replace(config.exit_chat_room_flag_str, "")
             print("\033[2K\r", end="")
             print(exit_message)
 
@@ -154,35 +153,45 @@ def tcp_flow():
 
     # サーバー側に揃える
     try:
-        tcp_sock.connect((tcp_server_address, tcp_server_port))
+        tcp_sock.connect((config.tcp_server_address, config.tcp_server_port))
     except socket.error as err:
         print(err)
         sys.exit(1)
 
-    state = 0
-    
-    request = input_flow()
-    tcp_sock.send(request)
 
-    tcp_sock.settimeout(2)
 
     while True:
         global chat_room_name
         global user_name
 
+        state = 0
+    
+        request = input_flow()
+        tcp_sock.send(request)
+
+        tcp_sock.settimeout(2)
+
         res_header, res_body = decode_protocol(tcp_sock.recv(4096))
         room_name_length, operation, state, payload_length = decode_protocol_header(res_header)
         chat_room_name, payload = decode_protocol_body(res_body, room_name_length, payload_length)
 
-        if state == 1:
-            print(f"ステータスコードは{payload}です。")
-        if state == 2:
-            print(f"{payload} トークンを受け取りました。")
-            global token
-            token = payload
-            chat_room_name = chat_room_name
-            print(f"{chat_room_name} チャットルームに参加しました。")
-            break
+
+        print(f"ステータスコードは{payload}です。")
+
+        res_header, res_body = decode_protocol(tcp_sock.recv(4096))
+        room_name_length, operation, state, payload_length = decode_protocol_header(res_header)
+        chat_room_name, payload = decode_protocol_body(res_body, room_name_length, payload_length)
+
+        if config.error_flag_str in payload:
+            print(payload.replace(config.error_flag_str, ""))
+            continue
+
+        print(f"{payload} トークンを受け取りました。")
+        global token
+        token = payload
+        chat_room_name = chat_room_name
+        print(f"{chat_room_name} チャットルームに参加しました。")
+        break
     tcp_sock.close()
 
 
@@ -229,7 +238,7 @@ def create_tcp_header(room_name_length: int, opr: int, state_length: int, payloa
     return room_name_length.to_bytes(1, "big") + opr.to_bytes(1, "big") + state_length.to_bytes(1, "big") + payload_length.to_bytes(29, "big")
 
 def on_finish(sock: socket.socket):
-    request = create_udp_protocol(exit_chat_room_flag_str)
+    request = create_udp_protocol(config.exit_chat_room_flag_str)
     sock.send(request)
     print("チャットルームから退出しました")
 

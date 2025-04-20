@@ -10,10 +10,6 @@ def decode_udp_protocol_header(header: bytes):
     print("token_length is ", token_length)
     return chat_room_name_length, token_length
 
-
-# トークンのdecodeうまくいっていない。
-# 一部メッセージの方にも漏れてしまっている。
-
 def decode_udp_protocol_body(body: bytes, chat_room_name_length: int, token_length: int):
     response_chat_room_name = body[:chat_room_name_length].decode()
     print(response_chat_room_name)

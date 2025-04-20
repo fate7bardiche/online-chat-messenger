@@ -11,10 +11,7 @@ from tcp_decoder import decode_tcp_protocol, decode_tcp_protocol_header, decode_
 from udp_decoder import decode_udp_protocol, decode_udp_protocol_header, decode_udp_protocol_body
 from packages import config
 
-
-
 chat_room_list = {}
-# client_list = []
 
 
 def filter_expired_users_token(chat_room_users, expired_second: int, now: datetime):
@@ -32,14 +29,10 @@ def delete_user(chat_room_users, user_token: str):
     user = chat_room_users[user_token]
     chat_room_users.pop(user_token)
     return user
-# user削除して削除したuserのオブジェクトを返す
-# sendするのは、削除とは別作業なので、関数とは別に戻り値のユーザーを使って削除する
 
-# 各クライアントの最後のメッセージ送信時刻を追跡し、条件を満たせば削除する
+# 一定時間ごとに各クライアントの最後のメッセージ送信時刻を追跡し、条件を満たせば削除する
 def remove_client(sock: socket.socket):
     while True:
-        # print(f"現在リレーシステムに存在しているclientは{len(client_list)}人")
-        # print(client_list)
         print("======================")
         now = datetime.now()
         print(now)
@@ -82,12 +75,6 @@ def udp_main():
         chat_room: dict = chat_room_list[response_chat_room_name]
 
         print(chat_room)
-        
-        # todo: chat_roomがundefineの場合は、該当する名前のチャットルームがないことを表す。
-        # チャットルームが存在しません系のメッセージをsendしておく。
-        if chat_room == None:
-            print("chat_room is undefined")
-            continue
        
         chat_room_users = chat_room["users"]
         user: dict = chat_room_users[response_token]
@@ -240,7 +227,6 @@ def create_user(user_name: str, address: tuple[str, int], user_token: str):
         }
     return user
 
-
 def create_tcp_header(room_name_length: int, opr: int, state_length: int, payload_length: int):
     return room_name_length.to_bytes(1, "big") + opr.to_bytes(1, "big") + state_length.to_bytes(1, "big") + payload_length.to_bytes(29, "big")
 
@@ -267,20 +253,7 @@ def tcp_main():
         tcp_thread = threading.Thread(target=tcp_flow, args=(connection, client_address), daemon=True)
         tcp_thread.start()
         
-
-
-
-
-
-
 if __name__ == "__main__":
-    
-    # thread_remove_user = threading.Thread(target=remove_client, args=(client_list, ), daemon=True)
-    # thread_tcp_flow = threading.Thread(target=tcp_flow, args=(), daemon=True)
-
-    # thread_remove_user.start()
-    # thread_tcp_flow.start()
-    # tcp_flow()
     thread_udp_flow = threading.Thread(target=udp_main, args=(), daemon=True)
     thread_udp_flow.start()
     tcp_main()

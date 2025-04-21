@@ -1,0 +1,2 @@
+def create_tcp_header(room_name_length: int, opr: int, state_length: int, payload_length: int):
+    return room_name_length.to_bytes(1, "big") + opr.to_bytes(1, "big") + state_length.to_bytes(1, "big") + payload_length.to_bytes(29, "big")

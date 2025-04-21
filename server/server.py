@@ -1,15 +1,15 @@
 import sys
 sys.path.append('..')
-
 import socket
 from datetime import datetime, timedelta
 import time
 import threading
 import uuid
 import time
-from tcp_decoder import decode_tcp_protocol, decode_tcp_protocol_header, decode_tcp_protocol_body
+from interface import tcp_encoder, tcp_decoder
 from udp_decoder import decode_udp_protocol, decode_udp_protocol_header, decode_udp_protocol_body
 from packages import config
+
 
 chat_room_list = {}
 
@@ -47,7 +47,7 @@ def remove_client(sock: socket.socket):
             for user_token in target_user_token_list:
                 deleted_user = delete_user(chat_room_users, user_token)
                 print("--- deleted client: ", chat_room_name, deleted_user)
-                delete_message = f"{config.error_flag_str}最後に投稿してから一定時間が経過したので、チャットから自動的に退出しました。"
+                delete_message = f"{config.exit_chat_room_flag_str}最後に投稿してから一定時間が経過したので、チャットから自動的に退出しました。"
                 sock.sendto(delete_message.encode(), deleted_user["udp_ip_address"])
  
         # リレーから削除するべきクライアントがいるかどうか、5秒ごとに確認する
@@ -56,10 +56,10 @@ def remove_client(sock: socket.socket):
 
 
 
+
 # UDP関係
 def udp_main():
     sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
-
     sock.bind((config.udp_server_address, config.udp_server_port))
 
     thread = threading.Thread(target=remove_client, args=(sock, ), daemon=True)
@@ -73,14 +73,9 @@ def udp_main():
         response_chat_room_name, response_token, response_message = decode_udp_protocol_body(body, chat_room_name_length, token_length)
 
         chat_room: dict = chat_room_list[response_chat_room_name]
-
-        print(chat_room)
        
         chat_room_users = chat_room["users"]
         user: dict = chat_room_users[response_token]
-        if user == None:
-            print("user is undefined")
-            continue
 
         user["last_accessed_at"] = datetime.now()
         if(user["udp_ip_address"] == None):
@@ -110,7 +105,6 @@ def udp_main():
                 print(f"{deleted_chat_room_name}チャットルームが削除されました")
                 continue
         
-        print(users_tokens)
         for user_token in users_tokens:
             destination_user = chat_room_users[user_token]
             destination_addr = destination_user["udp_ip_address"]
@@ -126,30 +120,28 @@ def udp_main():
 # TCP関係
 def tcp_flow(connection: socket.socket, address: tuple[str, int]):
     while True:
-        print("in while")
-
         try:
             data = connection.recv(4096)
         except socket.error as err:
             print(err)
             break
 
-        header, body = decode_tcp_protocol(data)
-        room_name_length, operation, state, payload_length = decode_tcp_protocol_header(header)
+        header, body = tcp_decoder.decode_tcp_protocol(data)
+        room_name_length, operation, state, payload_length = tcp_decoder.decode_tcp_protocol_header(header)
         room_name_bits = body[:room_name_length]
-        room_name, payload = decode_tcp_protocol_body(body, room_name_length)
+        room_name, payload = tcp_decoder.decode_tcp_protocol_body(body, room_name_length)
 
-        print(room_name_length)
-        print(operation)
-        print(state)
-        print(payload_length)
-        print(room_name)
-        print(payload)
+        print("room_name_length", room_name_length)
+        print("operation", operation)
+        print("state", state)
+        print("payload_length", payload_length)
+        print("room_name", room_name)
+        print("payload", payload)
 
         state += 1
         status_code = "200"
         status_code_bits = status_code.encode()
-        state_1_header = create_tcp_header(room_name_length, operation, state, len(status_code_bits))
+        state_1_header = tcp_encoder.create_tcp_header(room_name_length, operation, state, len(status_code_bits))
         state_1_response = state_1_header + room_name_bits + status_code_bits
         connection.send(state_1_response)
 
@@ -163,7 +155,7 @@ def tcp_flow(connection: socket.socket, address: tuple[str, int]):
                 exsists_chat_room_error = f"{config.error_flag_str}{room_name}チャットルームはすでに存在しています。"
                 print(exsists_chat_room_error)
                 exsists_chat_room_error_bits = exsists_chat_room_error.encode()
-                error_header = create_tcp_header(room_name_length, operation, state, len(exsists_chat_room_error_bits))
+                error_header = tcp_encoder.create_tcp_header(room_name_length, operation, state, len(exsists_chat_room_error_bits))
                 error_response = error_header + room_name_bits + exsists_chat_room_error_bits
                 connection.send(error_response)
                 continue
@@ -171,7 +163,6 @@ def tcp_flow(connection: socket.socket, address: tuple[str, int]):
             host_user_token_uuid = uuid.uuid4()
             host_user_token = str(host_user_token_uuid)
 
-            # crate chat room
             host_user = create_user(payload, address, host_user_token)
             chat_room = {
                 "host_token": host_user_token,
@@ -181,7 +172,7 @@ def tcp_flow(connection: socket.socket, address: tuple[str, int]):
             chat_room_list.setdefault(room_name, chat_room)
 
             host_user_token_bits = host_user_token.encode()
-            state_2_header = create_tcp_header(room_name_length, operation, state, len(host_user_token_bits))
+            state_2_header = tcp_encoder.create_tcp_header(room_name_length, operation, state, len(host_user_token_bits))
             state_2_response = state_2_header + room_name_bits + host_user_token_bits
             connection.send(state_2_response)
             print(f"{room_name} チャットルームを作成しました。")
@@ -194,7 +185,7 @@ def tcp_flow(connection: socket.socket, address: tuple[str, int]):
                 exsists_chat_room_error = f"{config.error_flag_str}{room_name}チャットルームはまだ存在しません。"
                 print(exsists_chat_room_error)
                 exsists_chat_room_error_bits = exsists_chat_room_error.encode()
-                error_header = create_tcp_header(room_name_length, operation, state, len(exsists_chat_room_error_bits))
+                error_header = tcp_encoder.create_tcp_header(room_name_length, operation, state, len(exsists_chat_room_error_bits))
                 error_response = error_header + room_name_bits + exsists_chat_room_error_bits
                 connection.send(error_response)
                 continue
@@ -208,7 +199,7 @@ def tcp_flow(connection: socket.socket, address: tuple[str, int]):
             chat_room["users"][user_token] = user
 
             user_token_bits = user_token.encode()
-            state_2_header = create_tcp_header(room_name_length, operation, state, len(user_token_bits))
+            state_2_header = tcp_encoder.create_tcp_header(room_name_length, operation, state, len(user_token_bits))
             state_2_response = state_2_header + room_name_bits + user_token_bits
             connection.send(state_2_response)
             print(f"{room_name} チャットルームに参加しました。")
@@ -227,9 +218,6 @@ def create_user(user_name: str, address: tuple[str, int], user_token: str):
         }
     return user
 
-def create_tcp_header(room_name_length: int, opr: int, state_length: int, payload_length: int):
-    return room_name_length.to_bytes(1, "big") + opr.to_bytes(1, "big") + state_length.to_bytes(1, "big") + payload_length.to_bytes(29, "big")
-
 def tcp_main():
     tcp_sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
 
@@ -239,17 +227,13 @@ def tcp_main():
     tcp_sock.listen(5)
 
     while True:
-        print("before acept")
         try:
             connection, client_address = tcp_sock.accept()
         except socket.error as err:
-            print("err block")
             print(err)
             break
     
-        print("after acept")
         print(client_address)
-
         tcp_thread = threading.Thread(target=tcp_flow, args=(connection, client_address), daemon=True)
         tcp_thread.start()
         

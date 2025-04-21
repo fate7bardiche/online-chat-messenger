@@ -102,20 +102,28 @@ def tcp_flow():
         room_name_length, operation, state, payload_length = tcp_decoder.decode_tcp_protocol_header(res_header)
         chat_room_name, payload = tcp_decoder.decode_tcp_protocol_body(res_body, room_name_length)
 
+
+        if not state == 1:
+            print("stateが1ではありません。サーバーからのレスポンスに問題がありました。最初からやり直してください。")
+            continue
         print(f"ステータスコードは{payload}です。")
 
         res_header, res_body = tcp_decoder.decode_tcp_protocol(tcp_sock.recv(4096))
         room_name_length, operation, state, payload_length = tcp_decoder.decode_tcp_protocol_header(res_header)
         chat_room_name, payload = tcp_decoder.decode_tcp_protocol_body(res_body, room_name_length)
 
+        if not state == 2:
+            print("stateが2ではありません。サーバーからのレスポンスに問題がありました。最初からやり直してください。")
+            continue
+
         if config.error_flag_str in payload:
             error_message = payload.replace(config.error_flag_str, "")
             print(error_message)
             continue
-
-        print(f"{payload} トークンを受け取りました。")
+        
         token = payload
         chat_room_name = chat_room_name
+        print(f"{payload} トークンを受け取りました。")
         print(f"{chat_room_name} チャットルームに参加しました。")
 
         break

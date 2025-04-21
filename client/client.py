@@ -7,6 +7,7 @@ import signal
 from packages import config
 from interface import tcp_encoder, tcp_decoder
 import udp_encoder
+from packages import config
 
 token = ""
 user_name = ""
@@ -22,6 +23,7 @@ def udp_flow(sock: socket.socket):
     print("token is ", token)
     print("user_name is ", user_name)
     print("chat_room_name is ", chat_room_name)
+    print("最後にメッセージを送ってから自動で退出されるまでの秒数", config.auto_kick_timeout_second)
 
     try:
         sock.connect((config.udp_server_address, config.udp_server_port))

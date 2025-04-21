@@ -9,3 +9,6 @@ udp_server_port = 9002
 # フラグ関係
 exit_chat_room_flag_str = "exit:"
 error_flag_str = "error:"
+
+# 退出処理関係
+auto_kick_timeout_second = 120

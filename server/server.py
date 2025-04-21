@@ -43,7 +43,7 @@ def remove_client(sock: socket.socket):
             chat_room_users = chat_room_list[chat_room_name]["users"]
 
             # 最後にメッセージを送ってから120秒以上経過しているクライアントのトークンを抽出
-            target_user_token_list = filter_expired_users_token(chat_room_users, 16, now)
+            target_user_token_list = filter_expired_users_token(chat_room_users, config.auto_kick_timeout_second, now)
             for user_token in target_user_token_list:
                 deleted_user = delete_user(chat_room_users, user_token)
                 print("--- deleted client: ", chat_room_name, deleted_user)

@@ -82,6 +82,9 @@ https://github.com/user-attachments/assets/5ab4e125-4681-491e-876b-0dcbf15c24a8
 
    最後にメッセージを送信してから一定時間が経過すると、自動的に退出されます。自動退出までの秒数はチャット参加時に表示されます。
 
+https://github.com/user-attachments/assets/5767057b-2baa-43b7-bc03-a2d378938166
+  
+
 ![スクリーンショット 2025-04-22 15 39 23](https://github.com/user-attachments/assets/00c4126b-2735-4dd7-a73c-aa8191bc451b)
 
 
